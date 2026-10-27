@@ -24,13 +24,11 @@ async function createProject(req, res, next) {
 }
 
 /** List Projects */
-// List Projects
 async function listProjects(req, res, next) {
   const tenantId = req.user.tenantId;
   const { status, search, page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
   try {
-    // Base query scoped to the tenant (explicit column qualification to avoid ambiguity)
     const baseQuery = knex('projects').where('projects.tenant_id', tenantId);
     if (status) baseQuery.andWhere({ status });
     if (search) baseQuery.andWhere('name', 'ilike', `%${search}%`);
@@ -42,54 +40,6 @@ async function listProjects(req, res, next) {
       .orderBy('projects.created_at', 'desc')
       .limit(limit)
       .offset(offset);
-    // Add task counts per project
-    const projectsWithCounts = await Promise.all(
-      projects.map(async p => {
-        const [{ cnt: taskCount }] = await knex('tasks').where({ project_id: p.id }).count('id');
-        const [{ cnt: completedCount }] = await knex('tasks')
-          .where({ project_id: p.id, status: 'completed' })
-          .count('id');
-        return {
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          status: p.status,
-          createdBy: { id: p.created_by, fullName: p.creator_name },
-          taskCount: parseInt(taskCount),
-          completedTaskCount: parseInt(completedCount),
-          createdAt: p.created_at
-        };
-      })
-    );
-    res.json({
-      success: true,
-      data: {
-        projects: projectsWithCounts,
-        total: parseInt(totalRes.cnt),
-        pagination: { currentPage: parseInt(page), totalPages: Math.ceil(totalRes.cnt / limit), limit: parseInt(limit) }
-      }
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-  const tenantId = req.user.tenantId;
-  const { status, search, page = 1, limit = 20 } = req.query;
-  const offset = (page - 1) * limit;
-  try {
-    const query = knex('projects').where({ tenant_id: tenantId });
-    if (status) query.andWhere({ status });
-    if (search) query.andWhere('name', 'ilike', `%${search}%`);
-    const totalRes = await query.clone().count('id as cnt').first();
-    const projects = await query
-      .clone()
-      .leftJoin('users as creator', 'projects.created_by', 'creator.id')
-      .select('projects.*', 'creator.full_name as creator_name')
-      .orderBy('projects.created_at', 'desc')
-      .limit(limit)
-      .offset(offset);
-    // Add task counts per project (sub‑query could be more efficient but fine for demo)
     const projectsWithCounts = await Promise.all(
       projects.map(async p => {
         const [{ cnt: taskCount }] = await knex('tasks').where({ project_id: p.id }).count('id');
